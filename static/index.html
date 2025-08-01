@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Excel 多模板替换工具</title>
+    <style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f7f9fc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    }
+    .card {
+        width: 420px;
+        background: #fff;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 {
+        text-align: center;
+        color: #333;
+    }
+    label {
+        font-weight: bold;
+        display: block;
+        margin: 15px 0 5px;
+    }
+    input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+    }
+    button {
+        width: 100%;
+        padding: 10px;
+        background: #4a90e2;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        margin-top: 20px;
+        cursor: pointer;
+    }
+    button:hover { background: #357ab8; }
+    #message { text-align: center; margin-top: 15px; color: #333; }
+</style>
+</head>
+<body>
+<div class="card">
+    <h2>Excel 模板批量替换</h2>
+    <form id="uploadForm">
+        <label>配置文件（config.xlsx）</label>
+        <input type="file" name="config" required>
+
+        <label>模板文件（可多选）</label>
+        <input type="file" name="templates" multiple required>
+
+        <button type="submit">提交并下载</button>
+    </form>
+    <div id="message"></div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const msg = document.getElementById('message');
+    msg.textContent = '⏳ 正在处理...';
+
+    try {
+        const res = await fetch('/replace_excel', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('服务器错误');
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'results.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        msg.textContent = '✅ 处理完成，已下载 ZIP 文件';
+    } catch (err) {
+        msg.textContent = '❌ 错误: ' + err.message;
+    }
+});
+</script>
+</body>
+</html>
