@@ -26,4 +26,4 @@ COPY static ./static
 EXPOSE 8080
 
 # 启动服务
-CMD ["./excel-replacer"]
+CMD ["/app/excel-replacer"]
