@@ -1,0 +1,5 @@
+main:
+  push:
+    - docker:
+        # 通过此参数控制使用的 Dockerfile
+        build: ./Dockerfile
