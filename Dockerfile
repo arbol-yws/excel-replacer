@@ -13,17 +13,18 @@ COPY . .
 RUN go build -o excel-replacer main.go
 
 # ========= 运行阶段 =========
-FROM alpine:3.19
+#FROM alpine:3.19
 
 # 设置工作目录
-WORKDIR /app
+#WORKDIR /app
 
 # 拷贝编译好的二进制和静态文件
-COPY --from=builder /app/excel-replacer /app/excel-replacer
+#COPY --from=builder /app/excel-replacer /app/excel-replacer
 COPY static ./static
+RUN chmod +x /app/excel-replacer
 
 # 暴露端口
 EXPOSE 8080
 
 # 启动服务
-CMD ["/app/excel-replacer"]
+CMD ["./excel-replacer"]

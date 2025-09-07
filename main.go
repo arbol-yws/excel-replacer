@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -59,11 +60,13 @@ func parseConfig(configPath string) (ReplaceConfig, error) {
 }
 
 // 替换模板内容
-func processTemplate(fileBytes []byte, filename string, cfg ReplaceConfig) ([]byte, error) {
+// 返回值：处理后的文件字节、可选的输出文件名（由特殊键 OUT_FILE 指定）
+func processTemplate(fileBytes []byte, filename string, cfg ReplaceConfig) ([]byte, string, error) {
 	var replacements []struct {
 		sheet string
 		rules map[string]string
 	}
+	var outFileName string
 
 	for header, rules := range cfg {
 		if strings.HasPrefix(header, filename+"#") {
@@ -72,17 +75,26 @@ func processTemplate(fileBytes []byte, filename string, cfg ReplaceConfig) ([]by
 				sheet string
 				rules map[string]string
 			}{sheet: sheet, rules: rules})
+			// 读取 OUT_FILE（优先取第一个出现的非空值）
+			if outFileName == "" {
+				if v, ok := rules["OUT_FILE"]; ok {
+					v = strings.TrimSpace(v)
+					if v != "" {
+						outFileName = v
+					}
+				}
+			}
 		}
 	}
 	if len(replacements) == 0 {
-		return nil, fmt.Errorf("没有找到 %s 的配置", filename)
+		return nil, "", fmt.Errorf("没有找到 %s 的配置", filename)
 	}
 
 	tmpPath := filepath.Join(os.TempDir(), filename)
 	os.WriteFile(tmpPath, fileBytes, 0644)
 	f, err := excelize.OpenFile(tmpPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer os.Remove(tmpPath)
 
@@ -110,11 +122,21 @@ func processTemplate(fileBytes []byte, filename string, cfg ReplaceConfig) ([]by
 
 	var buf bytes.Buffer
 	f.Write(&buf)
-	return buf.Bytes(), nil
+	return buf.Bytes(), outFileName, nil
 }
 
 func main() {
 	r := gin.Default()
+
+	// 增大上传体积限制（默认 512MB，可用环境变量 MAX_UPLOAD_MB 覆盖）
+	maxUploadMBStr := os.Getenv("MAX_UPLOAD_MB")
+	var maxUploadMB int64 = 512
+	if maxUploadMBStr != "" {
+		if v, err := strconv.Atoi(maxUploadMBStr); err == nil && v > 0 {
+			maxUploadMB = int64(v)
+		}
+	}
+	r.MaxMultipartMemory = maxUploadMB << 20
 	r.Static("/static", "./static") // 让 HTML 可访问
 
 	// 上传接口
@@ -140,7 +162,11 @@ func main() {
 			return
 		}
 
-		results := make(map[string][]byte)
+		type resultItem struct {
+			data    []byte
+			outName string
+		}
+		results := make(map[string]resultItem)
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 
@@ -153,10 +179,10 @@ func main() {
 				data, _ := io.ReadAll(fObj)
 				fObj.Close()
 
-				output, err := processTemplate(data, fh.Filename, cfg)
+				output, outName, err := processTemplate(data, fh.Filename, cfg)
 				if err == nil {
 					mu.Lock()
-					results[fh.Filename] = output
+					results[fh.Filename] = resultItem{data: output, outName: outName}
 					mu.Unlock()
 				}
 			}(file)
@@ -166,9 +192,25 @@ func main() {
 		// 打包ZIP
 		var zipBuf bytes.Buffer
 		zipWriter := zip.NewWriter(&zipBuf)
-		for fname, content := range results {
-			w, _ := zipWriter.Create(strings.TrimSuffix(fname, ".xlsx") + "_filled.xlsx")
-			w.Write(content)
+		for fname, item := range results {
+			// 使用模板扩展名作为默认（支持 .xlsm）
+			templateExt := strings.ToLower(filepath.Ext(fname))
+			if templateExt == "" {
+				templateExt = ".xlsx"
+			}
+
+			finalName := strings.TrimSpace(item.outName)
+			if finalName == "" {
+				base := strings.TrimSuffix(filepath.Base(fname), filepath.Ext(fname))
+				finalName = base + "_filled" + templateExt
+			} else {
+				finalName = filepath.Base(finalName)
+				if filepath.Ext(finalName) == "" {
+					finalName = finalName + templateExt
+				}
+			}
+			w, _ := zipWriter.Create(finalName)
+			w.Write(item.data)
 		}
 		zipWriter.Close()
 

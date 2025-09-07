@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.iml
+
+# Go build artifacts
+bin/
+build/
+dist/
+coverage.out
+*.test
+*.exe
+*.dll
+*.so
+*.dylib
+go.work
+go.work.sum
+
+# Dependencies (if vendored)
+vendor/
+
+# Logs & temp files
+*.log
+tmp/
+*.tmp
+
+# Environment files
+.env
+.env.*
+
+# Archives & generated downloads
+*.zip
+*.tar
+*.tar.gz
+
+# Docker ephemeral data
+docker-data/
+
